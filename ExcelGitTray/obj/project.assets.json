@@ -14,11 +14,11 @@
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Sitecore\\Projects\\Gitxel\\ExcelGitTray\\ExcelGitTray.csproj",
+      "projectUniqueName": "C:\\Sitecore\\Projects\\ExcelGitTray\\ExcelGitTray\\ExcelGitTray.csproj",
       "projectName": "ExcelGitTray",
-      "projectPath": "C:\\Sitecore\\Projects\\Gitxel\\ExcelGitTray\\ExcelGitTray.csproj",
+      "projectPath": "C:\\Sitecore\\Projects\\ExcelGitTray\\ExcelGitTray\\ExcelGitTray.csproj",
       "packagesPath": "C:\\Users\\ands\\.nuget\\packages\\",
-      "outputPath": "C:\\Sitecore\\Projects\\Gitxel\\ExcelGitTray\\obj\\",
+      "outputPath": "C:\\Sitecore\\Projects\\ExcelGitTray\\ExcelGitTray\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"

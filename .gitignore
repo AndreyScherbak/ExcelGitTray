@@ -1,0 +1,29 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Rider / JetBrains
+.idea/
+*.sln.iml
+
+# Logs
+*.log
+
+# NuGet
+*.nupkg
+packages/
+
+# Windows artifacts
+Thumbs.db
+Desktop.ini
+
+# Local app configuration (contains machine-specific paths)
+ExcelGitTray/appsettings.json
+

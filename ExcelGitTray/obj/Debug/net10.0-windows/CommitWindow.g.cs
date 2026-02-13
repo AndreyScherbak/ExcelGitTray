@@ -84,7 +84,7 @@ namespace ExcelGitTray {
                 return;
             }
             _contentLoaded = true;
-            System.Uri resourceLocater = new System.Uri("/ExcelGitTray;component/commitwindow.xaml", System.UriKind.Relative);
+            System.Uri resourceLocater = new System.Uri("/ExcelGitTray;V1.0.0.0;component/commitwindow.xaml", System.UriKind.Relative);
             
             #line 1 "..\..\..\CommitWindow.xaml"
             System.Windows.Application.LoadComponent(this, resourceLocater);
