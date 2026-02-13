@@ -1,0 +1,44 @@
+<Window x:Class="ExcelGitTray.CommitWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Excel Git Commit"
+        Height="220"
+        Width="460"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Name="FileLabel"
+                   FontWeight="SemiBold"
+                   Margin="0,0,0,8"
+                   Text="Commit message:" />
+
+        <TextBox Grid.Row="1"
+                 Name="CommitInput"
+                 Height="90"
+                 VerticalScrollBarVisibility="Auto"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap" />
+
+        <StackPanel Grid.Row="2"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button Name="CommitButton"
+                    Content="Commit"
+                    Width="100"
+                    Click="OnCommit" />
+            <Button Name="CommitPushButton"
+                    Content="Commit + Push"
+                    Width="130"
+                    Margin="10,0,0,0"
+                    Click="OnCommitPush" />
+        </StackPanel>
+    </Grid>
+</Window>
