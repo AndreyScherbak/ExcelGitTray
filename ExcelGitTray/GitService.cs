@@ -8,9 +8,10 @@ public sealed class GitService
 {
     private readonly string _repoPath;
     private readonly string _targetRelativePath;
+    private readonly string _branchName;
     private readonly SemaphoreSlim _gitLock = new(1, 1);
 
-    public GitService(string repoPath, string targetFilePath)
+    public GitService(string repoPath, string targetFilePath, string branchName = "main")
     {
         if (string.IsNullOrWhiteSpace(repoPath))
         {
@@ -24,6 +25,7 @@ public sealed class GitService
 
         _repoPath = repoPath;
         _targetRelativePath = Path.GetRelativePath(repoPath, targetFilePath);
+        _branchName = string.IsNullOrWhiteSpace(branchName) ? "main" : branchName.Trim();
     }
 
     public async Task<GitResult> PullAsync(CancellationToken cancellationToken = default)
@@ -93,10 +95,10 @@ public sealed class GitService
                 return GitResult.SuccessResult("Commit completed.");
             }
 
-            var pushResult = await RunGitAsync(new[] { "push" }, cancellationToken);
+            var pushResult = await SafePushInternalAsync(cancellationToken);
             return pushResult.Success
                 ? GitResult.SuccessResult("Commit and push completed.")
-                : GitResult.FailureResult($"Commit succeeded, but git push failed: {pushResult.Summary}");
+                : GitResult.FailureResult($"Commit succeeded, but push failed: {pushResult.Message}");
         }
         finally
         {
@@ -110,10 +112,10 @@ public sealed class GitService
 
         try
         {
-            var result = await RunGitAsync(new[] { "push" }, cancellationToken);
+            var result = await SafePushInternalAsync(cancellationToken);
             return result.Success
                 ? GitResult.SuccessResult("Push completed.")
-                : GitResult.FailureResult($"git push failed: {result.Summary}");
+                : GitResult.FailureResult(result.Message);
         }
         finally
         {
@@ -133,6 +135,121 @@ public sealed class GitService
         {
             _gitLock.Release();
         }
+    }
+
+    public async Task<PushResult> SafePushAsync(CancellationToken cancellationToken = default)
+    {
+        await _gitLock.WaitAsync(cancellationToken);
+
+        try
+        {
+            return await SafePushInternalAsync(cancellationToken);
+        }
+        finally
+        {
+            _gitLock.Release();
+        }
+    }
+
+    private async Task<PushResult> SafePushInternalAsync(CancellationToken cancellationToken)
+    {
+        var fetchResult = await RunGitAsync(new[] { "fetch", "origin" }, cancellationToken);
+        if (!fetchResult.Success)
+        {
+            return PushResult.Failure($"git fetch origin failed: {fetchResult.Summary}");
+        }
+
+        var localHeadResult = await RunGitAsync(new[] { "rev-parse", "HEAD" }, cancellationToken);
+        if (!localHeadResult.Success)
+        {
+            return PushResult.Failure($"Unable to resolve local HEAD: {localHeadResult.Summary}");
+        }
+
+        var remoteRef = $"origin/{_branchName}";
+        var remoteHeadResult = await RunGitAsync(
+            new[] { "rev-parse", remoteRef },
+            cancellationToken,
+            treatNonZeroExitCodeAsError: false);
+
+        if (remoteHeadResult.ExitCode == 0)
+        {
+            var mergeBaseResult = await RunGitAsync(
+                new[] { "merge-base", "HEAD", remoteRef },
+                cancellationToken);
+
+            if (!mergeBaseResult.Success)
+            {
+                return PushResult.Failure($"Unable to calculate merge-base: {mergeBaseResult.Summary}");
+            }
+
+            var remoteHead = remoteHeadResult.StandardOutput.Trim();
+            var mergeBase = mergeBaseResult.StandardOutput.Trim();
+
+            if (!string.Equals(mergeBase, remoteHead, StringComparison.OrdinalIgnoreCase))
+            {
+                return PushResult.Rejected("Push rejected. Remote repository contains new changes. Please Pull first.");
+            }
+        }
+
+        var pushResult = await RunGitAsync(new[] { "push", "origin", _branchName }, cancellationToken);
+        return pushResult.Success
+            ? PushResult.SuccessResult("Push completed.")
+            : PushResult.Failure($"git push failed: {pushResult.Summary}");
+    }
+
+    public static PushResult SafePush()
+    {
+        return SafePush(Directory.GetCurrentDirectory(), "main");
+    }
+
+    public static PushResult SafePush(string repoPath, string branchName = "main")
+    {
+        if (string.IsNullOrWhiteSpace(repoPath))
+        {
+            return PushResult.Failure("Repository path cannot be empty.");
+        }
+
+        if (!Directory.Exists(repoPath))
+        {
+            return PushResult.Failure($"Repository directory not found: {repoPath}");
+        }
+
+        var branch = string.IsNullOrWhiteSpace(branchName) ? "main" : branchName.Trim();
+        var remoteRef = $"origin/{branch}";
+
+        var fetchResult = RunGitCommand(repoPath, "fetch", "origin");
+        if (!fetchResult.Success)
+        {
+            return PushResult.Failure($"git fetch origin failed: {fetchResult.Summary}");
+        }
+
+        var localHeadResult = RunGitCommand(repoPath, "rev-parse", "HEAD");
+        if (!localHeadResult.Success)
+        {
+            return PushResult.Failure($"Unable to resolve local HEAD: {localHeadResult.Summary}");
+        }
+
+        var remoteHeadResult = RunGitCommand(repoPath, "rev-parse", remoteRef, treatNonZeroExitCodeAsError: false);
+        if (remoteHeadResult.ExitCode == 0)
+        {
+            var mergeBaseResult = RunGitCommand(repoPath, "merge-base", "HEAD", remoteRef);
+            if (!mergeBaseResult.Success)
+            {
+                return PushResult.Failure($"Unable to calculate merge-base: {mergeBaseResult.Summary}");
+            }
+
+            var remoteHead = remoteHeadResult.StandardOutput.Trim();
+            var mergeBase = mergeBaseResult.StandardOutput.Trim();
+            if (!string.Equals(mergeBase, remoteHead, StringComparison.OrdinalIgnoreCase))
+            {
+                return PushResult.Rejected("Push rejected. Remote repository contains new changes. Please Pull first.");
+            }
+        }
+
+        var pushResult = RunGitCommand(repoPath, "push", "origin", branch);
+        return pushResult.Success
+            ? PushResult.SuccessResult("Push completed.")
+            : PushResult.Failure($"git push failed: {pushResult.Summary}");
     }
 
     private async Task<ProcessResult> RunGitAsync(
@@ -175,6 +292,64 @@ public sealed class GitService
         var error = await standardErrorTask;
         var success = process.ExitCode == 0 || !treatNonZeroExitCodeAsError;
 
+        return new ProcessResult(process.ExitCode, success, output, error);
+    }
+
+    private static ProcessResult RunGitCommand(
+        string repoPath,
+        string arg0,
+        string arg1,
+        bool treatNonZeroExitCodeAsError = true)
+    {
+        return RunGitCommand(repoPath, new[] { arg0, arg1 }, treatNonZeroExitCodeAsError);
+    }
+
+    private static ProcessResult RunGitCommand(
+        string repoPath,
+        string arg0,
+        string arg1,
+        string arg2,
+        bool treatNonZeroExitCodeAsError = true)
+    {
+        return RunGitCommand(repoPath, new[] { arg0, arg1, arg2 }, treatNonZeroExitCodeAsError);
+    }
+
+    private static ProcessResult RunGitCommand(
+        string repoPath,
+        string[] arguments,
+        bool treatNonZeroExitCodeAsError = true)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "git",
+            WorkingDirectory = repoPath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        using var process = new Process { StartInfo = startInfo };
+
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex)
+        {
+            return new ProcessResult(-1, false, string.Empty, ex.Message);
+        }
+
+        var output = process.StandardOutput.ReadToEnd();
+        var error = process.StandardError.ReadToEnd();
+        process.WaitForExit();
+
+        var success = process.ExitCode == 0 || !treatNonZeroExitCodeAsError;
         return new ProcessResult(process.ExitCode, success, output, error);
     }
 
@@ -231,4 +406,22 @@ public sealed record GitResult(bool Success, string Message)
     public static GitResult SuccessResult(string message) => new(true, message);
 
     public static GitResult FailureResult(string message) => new(false, message);
+}
+
+public sealed class PushResult
+{
+    public bool Success { get; set; }
+
+    public bool RejectedDueToRemoteChanges { get; set; }
+
+    public string Message { get; set; } = string.Empty;
+
+    public static PushResult SuccessResult(string message) =>
+        new() { Success = true, RejectedDueToRemoteChanges = false, Message = message };
+
+    public static PushResult Rejected(string message) =>
+        new() { Success = false, RejectedDueToRemoteChanges = true, Message = message };
+
+    public static PushResult Failure(string message) =>
+        new() { Success = false, RejectedDueToRemoteChanges = false, Message = message };
 }

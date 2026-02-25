@@ -28,7 +28,7 @@ public partial class CommitWindow : Window
 
     private async void OnCommitPush(object sender, RoutedEventArgs e)
     {
-        await CommitInternalAsync(pushAfterCommit: true);
+        await CommitAndPushInternalAsync();
     }
 
     private async Task CommitInternalAsync(bool pushAfterCommit)
@@ -63,6 +63,77 @@ public partial class CommitWindow : Window
 
             System.Windows.MessageBox.Show(
                 result.Message,
+                "Git Operation Failed",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(
+                ex.Message,
+                "Unexpected Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
+
+    private async Task CommitAndPushInternalAsync()
+    {
+        if (_isBusy)
+        {
+            return;
+        }
+
+        var message = CommitInput.Text.Trim();
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            System.Windows.MessageBox.Show(
+                "Commit message cannot be empty.",
+                "Validation",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Warning);
+            CommitInput.Focus();
+            return;
+        }
+
+        SetBusy(true);
+
+        try
+        {
+            var commitResult = await _gitService.CommitAsync(message, pushAfterCommit: false);
+            if (!commitResult.Success)
+            {
+                System.Windows.MessageBox.Show(
+                    commitResult.Message,
+                    "Git Operation Failed",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Error);
+                return;
+            }
+
+            var pushResult = await _gitService.SafePushAsync();
+            if (pushResult.Success)
+            {
+                Close();
+                return;
+            }
+
+            if (pushResult.RejectedDueToRemoteChanges)
+            {
+                System.Windows.MessageBox.Show(
+                    "Push rejected. Remote repository contains new changes. Please Pull first.",
+                    "Push Rejected",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+                return;
+            }
+
+            System.Windows.MessageBox.Show(
+                pushResult.Message,
                 "Git Operation Failed",
                 System.Windows.MessageBoxButton.OK,
                 System.Windows.MessageBoxImage.Error);

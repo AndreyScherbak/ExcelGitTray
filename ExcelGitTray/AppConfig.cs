@@ -7,6 +7,7 @@ public sealed class AppConfig
 {
     public string ExcelFilePath { get; set; } = @"C:\Repo\schedule.xlsx";
     public string TrayIconPath { get; set; } = "tray.ico";
+    public string GitBranch { get; set; } = "main";
     private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
     public static AppConfig LoadOrCreateDefault()
@@ -24,6 +25,11 @@ public sealed class AppConfig
         if (string.IsNullOrWhiteSpace(config.ExcelFilePath))
         {
             throw new InvalidOperationException("ExcelFilePath is missing in appsettings.json.");
+        }
+
+        if (string.IsNullOrWhiteSpace(config.GitBranch))
+        {
+            config.GitBranch = "main";
         }
 
         return config;

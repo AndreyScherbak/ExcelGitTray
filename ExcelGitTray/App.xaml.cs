@@ -355,7 +355,7 @@ public partial class App : System.Windows.Application
             throw new InvalidOperationException("Application config is not available.");
         }
 
-        _gitService = new GitService(repoPath, targetFilePath);
+        _gitService = new GitService(repoPath, targetFilePath, _config.GitBranch);
         _config.ExcelFilePath = targetFilePath;
 
         if (saveConfig)
